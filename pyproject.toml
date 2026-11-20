@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nginxwatch"
+version = "0.1.0"
+description = "Is my nginx exploitable? Checks version, configuration and distribution patches against nginx.org advisories"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "VIEH Security Team" }]
+requires-python = ">=3.9"
+dependencies = []
+keywords = ["nginx", "security", "cve", "vulnerability", "http2", "devsecops", "github-actions"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Security",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+    "Environment :: Console",
+]
+
+[project.scripts]
+nginxwatch = "nginxwatch.cli:main"
+
+[tool.setuptools]
+packages = ["nginxwatch"]
+
+[tool.setuptools.package-data]
+nginxwatch = ["data/*.json"]

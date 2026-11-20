@@ -1,0 +1,27 @@
+name: nginxwatch
+description: "Find nginx versions and configurations exposed to known nginx.org advisories in a repository"
+author: VIEH Security Team
+branding:
+  icon: shield
+  color: green
+
+inputs:
+  path:
+    description: "Folder to scan for nginx configs, Dockerfiles, Compose files and Kubernetes manifests"
+    default: "."
+  fail-on:
+    description: "Fail at this severity or above: critical, high, medium, low or never"
+    default: high
+
+runs:
+  using: composite
+  steps:
+    - name: Check nginx
+      shell: bash
+      env:
+        NW_PATH: ${{ inputs.path }}
+        NW_FAIL_ON: ${{ inputs.fail-on }}
+        PYTHONPATH: ${{ github.action_path }}
+      run: |
+        # No dependencies: run straight from the action checkout.
+        python3 -m nginxwatch repo "$NW_PATH" --format github --summary "$GITHUB_STEP_SUMMARY" --fail-on "$NW_FAIL_ON"
