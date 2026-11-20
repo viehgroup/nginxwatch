@@ -1,0 +1,57 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    # 24.04 still ships Python 3.9; ubuntu-latest (26.04) does not
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.9", "3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m unittest discover -s . -p "test_*.py" -v
+
+  real-nginx:
+    # Check a real distribution nginx end to end (result depends on the package of the day)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - run: sudo apt-get install -y -qq nginx
+      - run: sudo python3 -m nginxwatch --fail-on never
+
+  action:
+    # The action must fail on a vulnerable setup and pass a patched one
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - run: |
+          mkdir -p vulnerable/nginx patched/nginx
+          printf 'services:\n  web:\n    image: nginx:1.31.8\n' > vulnerable/docker-compose.yml
+          printf 'events {}\nhttp { server { listen 443 ssl; http2 on; } }\n' > vulnerable/nginx/nginx.conf
+          printf 'services:\n  web:\n    image: nginx:1.30.7-alpine\n' > patched/docker-compose.yml
+          cp vulnerable/nginx/nginx.conf patched/nginx/nginx.conf
+      - name: Vulnerable (should fail)
+        id: bad
+        continue-on-error: true
+        uses: ./
+        with:
+          path: vulnerable
+      - name: Patched (should pass)
+        uses: ./
+        with:
+          path: patched
+      - name: Check outcome
+        env:
+          BAD: ${{ steps.bad.outcome }}
+        run: test "$BAD" = failure
