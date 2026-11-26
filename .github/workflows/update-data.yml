@@ -28,7 +28,7 @@ jobs:
         run: python -m unittest discover -s . -p "test_*.py"
       - name: Commit if anything changed
         run: |
-          if git diff --quiet -- nginxwatch/data; then
+          if [ -z "$(git status --porcelain -- nginxwatch/data)" ]; then
             echo "Data already current."
             exit 0
           fi
