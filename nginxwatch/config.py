@@ -278,6 +278,8 @@ def features(tree: List[Directive], version: Optional[Version] = None) -> Featur
                 f.add("http3", d)
             elif name == "ssl" and args[:1] == ["on"]:
                 f.add("ssl", d)
+            elif name == "ssl_early_data" and args[:1] == ["on"]:
+                f.add("early_data", d)
             elif name in PASSES and top == "http":
                 f.add("proxy", d)
                 if name == "grpc_pass":

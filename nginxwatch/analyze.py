@@ -17,7 +17,7 @@ FEATURE_WORDS = {
     "spdy": "SPDY", "mp4": "the mp4 module", "dav": "WebDAV", "slice": "the slice module", "ssi": "SSI",
     "charset": "charset conversion", "scgi_uwsgi": "SCGI or uWSGI", "rewrite": "rewrite rules", "aio": "AIO",
     "ssl": "TLS", "mail_cram_apop": "CRAM-MD5 or APOP mail auth", "map_regex": "map with regular expressions",
-    "windows": "nginx on Windows",
+    "windows": "nginx on Windows", "early_data": "TLS 1.3 early data (ssl_early_data)",
 }
 MITIGATIONS = {
     "CVE-2026-123007": "If you can't upgrade today, turning HTTP/2 off (remove `http2` from `listen`, or `http2 off;`) "
