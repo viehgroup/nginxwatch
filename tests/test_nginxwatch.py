@@ -15,7 +15,12 @@ from nginxwatch import analyze, cli, local, report, targets
 from nginxwatch import config as C
 from nginxwatch.advisories import load, parse_version as v, upgrade_target, vstr
 
-DB = load()
+# Logic tests run against a frozen copy of the data (20 November 2026), so a new
+# nginx advisory, which changes the right answers, doesn't break them. The live
+# data is checked separately in LiveData.
+FROZEN = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "advisories_2026-11-20.json")
+DB = load(FROZEN)
+FROZEN_DB = mock.patch.object(cli, "load_db", lambda: load(FROZEN))
 
 
 def adv(cve):
@@ -48,11 +53,26 @@ class Versions(unittest.TestCase):
         self.assertEqual(DB.affecting(v("1.30.7")), [])
         self.assertEqual(DB.affecting(v("1.31.9")), [])
 
-    def test_data_is_complete(self):
+    def test_frozen_data_is_complete(self):
         self.assertEqual(len(DB.advisories), 77)
-        for a in DB.advisories:
+
+
+class LiveData(unittest.TestCase):
+    """The shipped data, whatever date it is from: sane, and never losing what we know."""
+
+    def test_shipped_data(self):
+        live = load()
+        self.assertGreaterEqual(len(live.advisories), len(DB.advisories))
+        self.assertTrue({a.id for a in DB.advisories} <= {a.id for a in live.advisories})
+        for a in live.advisories:
             self.assertTrue(a.vulnerable and a.fixed, a.id)
-            self.assertIn(a.severity, ("critical", "high", "medium", "low"))
+            self.assertIn(a.severity, ("critical", "high", "medium", "low"), a.id)
+            for lo, hi in a.vulnerable:
+                self.assertLessEqual(lo, hi, a.id)
+        # the November 2026 HTTP/2 RCE stays fixed in its two releases whatever comes later
+        a = next(x for x in live.advisories if x.id == "CVE-2026-123007")
+        self.assertFalse(a.affects(v("1.30.7")))
+        self.assertFalse(a.affects(v("1.31.9")))
 
 
 CONF = """
@@ -212,6 +232,7 @@ class Local(unittest.TestCase):
         self.assertEqual(fixed, {"CVE-2026-123007", "CVE-2026-123633"})
 
 
+@FROZEN_DB
 class Repos(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
@@ -284,6 +305,7 @@ class Remote(unittest.TestCase):
         self.assertEqual(pr.error, "")
 
 
+@FROZEN_DB
 class Cli(unittest.TestCase):
     def run_cli(self, *argv):
         buf = io.StringIO()
