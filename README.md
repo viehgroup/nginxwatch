@@ -118,25 +118,39 @@ Options: `--format text|json|sarif|github|markdown`, `--fail-on critical|high|me
 `--all` (also list advisories that don't apply), `--summary FILE`. The exit code is `1` when
 something at or above `--fail-on` (default `high`) is exploitable or possibly exploitable.
 
-## Where the data comes from
+## Where the data comes from, and how it stays current
 
-All 78 advisories on [nginx.org/en/security_advisories.html](https://nginx.org/en/security_advisories.html)
-(77 used; one is informational), retrieved 20 November 2026, with each one's vulnerable
-range and fixed releases. `tools/advisories_raw.txt` is the snapshot and
-`tools/build_data.py` rebuilds the data file from it. Severity is nginx.org's, raised to
-critical where Wiz rated an issue CVSS 9.0 or above.
+Every advisory nginx.org has published, with each one's vulnerable range and fixed
+releases. A [scheduled workflow](.github/workflows/update-data.yml) refreshes the data
+**every day** from three official sources, all read from GitHub:
 
-The conditions for the November 2026 batch follow Wiz's disclosure. For example, "HTTP/2 as
-a proxy server" is read as HTTP/2 enabled together with `proxy_pass`, `grpc_pass` or
-another `*_pass` directive. Conditions for older advisories are read from each advisory's
-title (the mp4 module, WebDAV, SSI, and so on); ten older advisories apply to any setup.
+| Data | Source |
+|---|---|
+| Advisories | nginx.org's own site source, [nginx/nginx.org](https://github.com/nginx/nginx.org) (`xml/en/security_advisories.xml`) |
+| Severity of new advisories | the CVE record F5 publishes, in [CVEProject/cvelistV5](https://github.com/CVEProject/cvelistV5) (CVSS 4.0, else 3.1) |
+| Newest release of each branch | the release tags of [nginx/nginx](https://github.com/nginx/nginx) |
+
+The workflow runs [`tools/update_data.py`](tools/update_data.py), runs the full test suite,
+and commits only if something changed. It refuses to publish, and the run fails, if the
+sources look wrong: too few advisories, an advisory that disappeared, a version it can't
+read, or a branch whose newest release went backwards. Run it yourself with
+`python tools/update_data.py --check`.
+
+Severity is nginx.org's for the advisories that had one, raised to critical where an issue
+is rated CVSS 9.0 or above; newer advisories take F5's rating from the CVE record. The
+conditions for the November 2026 batch follow Wiz's disclosure. For example, "HTTP/2 as a
+proxy server" is read as HTTP/2 enabled together with `proxy_pass`, `grpc_pass` or another
+`*_pass` directive. Conditions for other advisories are read from each advisory's title (the
+mp4 module, WebDAV, SSI, `ssl_early_data`, and so on). A new advisory whose title matches no
+rule applies to any setup, so nginxwatch errs towards warning.
 
 ## How it was tested
 
 - **Real nginx builds** from the official source: 1.31.8 with HTTPS, HTTP/2 and a reverse
   proxy is reported exploitable to CVE-2026-123007, CVE-2026-123633 and CVE-2026-118899,
   with the lines responsible and 1.31.9 as the fix. 1.30.7 with the identical configuration
-  is reported clean.
+  is reported clean. (Those were the right answers on 21 November; the advisory nginx.org
+  published on 25 November moved the newest fixes to 1.31.10 and 1.30.8.)
 - **Ubuntu 24.04's nginx** (1.24.0-2ubuntu7.21): all 29 advisories that match its version
   number are credited as backported from the package changelog, so it's reported clean.
 - **Include handling checked against nginx itself:** on h5bp/server-configs-nginx,
@@ -145,8 +159,13 @@ title (the mp4 module, WebDAV, SSI, and so on); ten older advisories apply to an
 - **Real repositories:** docker/awesome-compose, mailcow, nextcloud/docker, nginx-proxy, h5bp
   and docker-nginx-unprivileged scan without errors. nginx-proxy's pinned
   `nginx:1.31.6` is reported as needing 1.31.9; mailcow's 1.30.7 as clean.
-- 23 unit tests on Python 3.9, 3.11 and 3.13. CI also runs it on Ubuntu's nginx package and
-  runs the action, requiring it to fail on a vulnerable setup and pass a patched one.
+- **Data updates:** on its first run the updater found the one advisory published after the
+  initial snapshot (CVE-2026-132779, fixed in 1.31.10 and 1.30.8) and the two new releases,
+  and confirmed all 77 earlier advisories matched nginx.org exactly. A second run changes nothing.
+- 36 unit tests on Python 3.9, 3.11 and 3.13. Logic tests use a frozen copy of the data
+  (20 November 2026), so a new advisory can't break them; separate checks keep the shipped
+  data sane. CI also runs nginxwatch on Ubuntu's nginx package and runs the action,
+  requiring it to fail on a vulnerable setup and pass a patched one.
 
 ```
 python -m unittest discover -s . -p "test_*.py" -v
@@ -160,14 +179,16 @@ python -m unittest discover -s . -p "test_*.py" -v
 - Backported fixes are recognised on Debian, Ubuntu and RPM-based systems from the package
   changelog. Other distributions and vendor builds (OpenResty, Tengine, NGINX Plus) are
   matched by version only.
-- The advisory data is a snapshot. Rebuild it with `tools/build_data.py` when nginx.org
-  publishes new advisories.
+- The data is as fresh as the last daily update: a new advisory can take up to a day to
+  appear. GitHub pauses scheduled workflows in a repository with no activity for 60 days;
+  if that happens, re-enable it from the Actions tab (or run `tools/update_data.py`).
 - The safest answer is still to upgrade: "doesn't apply here" today can change with a
   configuration edit tomorrow.
 
 ## Related
 
 From the same team:
+[scriptwatch](https://github.com/viehgroup/scriptwatch) catches hacked third-party scripts on websites,
 [ghostwatch](https://github.com/viehgroup/ghostwatch) finds hidden instructions for AI,
 [bumpwatch](https://github.com/viehgroup/bumpwatch) catches hijacked dependency updates,
 [extwatch](https://github.com/viehgroup/extwatch) catches backdoored editor extensions,
